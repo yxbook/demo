@@ -2,12 +2,7 @@ package com.example.demo.controller;
 
 import org.pentaho.di.core.KettleEnvironment;
 import org.pentaho.di.core.database.DatabaseMeta;
-import org.pentaho.di.core.exception.KettleException;
-import org.pentaho.di.core.exception.KettleMissingPluginsException;
-import org.pentaho.di.core.exception.KettleXMLException;
 import org.pentaho.di.core.logging.StepLogTable;
-import org.pentaho.di.core.plugins.PluginRegistry;
-import org.pentaho.di.core.plugins.StepPluginType;
 import org.pentaho.di.core.variables.VariableSpace;
 import org.pentaho.di.core.variables.Variables;
 import org.pentaho.di.trans.Trans;
@@ -15,11 +10,9 @@ import org.pentaho.di.trans.TransHopMeta;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.step.StepIOMetaInterface;
 import org.pentaho.di.trans.step.StepMeta;
-import org.pentaho.di.trans.steps.insertupdate.InsertUpdateMeta;
 import org.pentaho.di.trans.steps.mergerows.MergeRowsMeta;
 import org.pentaho.di.trans.steps.synchronizeaftermerge.SynchronizeAfterMergeMeta;
 import org.pentaho.di.trans.steps.tableinput.TableInputMeta;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -69,8 +62,12 @@ public class UserController {
                     "</connection>"
     };
 
-    @GetMapping("/test")
-    public String test(){
+
+    public static void main(String[] args) {
+        test();
+    }
+
+    public static String test(){
 
         try {
             KettleEnvironment.init();
@@ -103,11 +100,11 @@ public class UserController {
             TableInputMeta oldTableInput = new TableInputMeta();
             DatabaseMeta database_bjdt = transMeta.findDatabase("bjdt");
             oldTableInput.setDatabaseMeta(database_bjdt);
-            String old_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE FROM "+bjdt_tablename;
+            String old_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE, CAPTITY FROM "+kettle_tablename + " WHERE TYPE = 4";
             oldTableInput.setSQL(old_select_sql);
 
             //添加TableInputMeta到转换中
-            StepMeta oldTableInputMetaStep = new StepMeta("INPUTTABLE_"+bjdt_tablename,oldTableInput);
+            StepMeta oldTableInputMetaStep = new StepMeta("INPUTTABLE_"+kettle_tablename,oldTableInput);
             //给步骤添加在spoon工具中的显示位置
             transMeta.addStep(oldTableInputMetaStep);
             //*****************************************************************
@@ -116,11 +113,11 @@ public class UserController {
             //给表输入添加一个DatabaseMeta连接数据库
             DatabaseMeta database_kettle = transMeta.findDatabase("kettle");
             newTableInput.setDatabaseMeta(database_kettle);
-            String new_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE FROM "+kettle_tablename;
+            String new_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE , CAPTITY FROM "+bjdt_tablename + " WHERE TYPE = 4";
             newTableInput.setSQL(new_select_sql);
 
             //添加TableInputMeta到转换中
-            StepMeta newTableInputMetaStep = new StepMeta("INPUTTABLE_"+kettle_tablename,newTableInput);
+            StepMeta newTableInputMetaStep = new StepMeta("INPUTTABLE_"+bjdt_tablename,newTableInput);
             //给步骤添加在spoon工具中的显示位置
             transMeta.addStep(newTableInputMetaStep);
             //******************************************************************
@@ -132,9 +129,9 @@ public class UserController {
             StepIOMetaInterface stepIOMeta = mergeRowsMeta.getStepIOMeta();
             stepIOMeta.getInfoStreams().get(0).setStepMeta(newTableInputMetaStep);
             stepIOMeta.getInfoStreams().get(1).setStepMeta(oldTableInputMetaStep);
-            mergeRowsMeta.setFlagField("bz"); //设置标志字段
+            mergeRowsMeta.setFlagField("xxx"); //设置标志字段
             mergeRowsMeta.setKeyFields(new String[]{"ID"});
-            mergeRowsMeta.setValueFields(new String[]{"IP","CREATEDATETIME","LOGINNAME","TYPE"});
+            mergeRowsMeta.setValueFields(new String[]{"IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"});
             StepMeta mergeStepMeta = new StepMeta("合并记录", mergeRowsMeta);
             transMeta.addStep(mergeStepMeta);
             //******************************************************************
@@ -151,23 +148,24 @@ public class UserController {
             synchronizeAfterMergeMeta.setCommitSize(10000); //设置事务提交数量
             synchronizeAfterMergeMeta.setDatabaseMeta(database_kettle); //目标数据源
             synchronizeAfterMergeMeta.setSchemaName("");//数据表schema
-            synchronizeAfterMergeMeta.setTableName(kettle_tablename); //数据表名称
+            synchronizeAfterMergeMeta.setTableName(bjdt_tablename); //数据表名称
             synchronizeAfterMergeMeta.setUseBatchUpdate(true); //设置批量更新
             //设置用来查询的关键字
-            synchronizeAfterMergeMeta.setKeyLookup(new String[]{"ID"}); //设置用来查询的关键字
-            synchronizeAfterMergeMeta.setKeyStream(new String[]{"ID"}); //设置流输入的字段
+            synchronizeAfterMergeMeta.setKeyLookup(new String[]{"ID", "CAPTITY"}); //设置用来查询的关键字
+            synchronizeAfterMergeMeta.setKeyStream(new String[]{"ID", "CAPTITY"}); //设置流输入的字段
             synchronizeAfterMergeMeta.setKeyStream2(new String[]{""});//一定要加上
-            synchronizeAfterMergeMeta.setKeyCondition(new String[]{"="}); //设置操作符
+            synchronizeAfterMergeMeta.setKeyCondition(new String[]{"=", "<"}); //设置操作符
             //设置要更新的字段
-            String[] updatelookup = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE"} ;
-            String [] updateStream = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE"};
-            Boolean[] updateOrNot = {false,true,true,true,true};
+            String[] updatelookup = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"} ;
+            String [] updateStream = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"};
+            Boolean[] updateOrNot = {false,true,true,true,true,true};
             synchronizeAfterMergeMeta.setUpdateLookup(updatelookup);
             synchronizeAfterMergeMeta.setUpdateStream(updateStream);
             synchronizeAfterMergeMeta.setUpdate(updateOrNot);
 
+
             //设置高级属性(操作)
-            synchronizeAfterMergeMeta.setOperationOrderField("bz"); //设置操作标志字段名
+            synchronizeAfterMergeMeta.setOperationOrderField("xxx"); //设置操作标志字段名
             synchronizeAfterMergeMeta.setOrderInsert("new");
             synchronizeAfterMergeMeta.setOrderUpdate("changed");
             synchronizeAfterMergeMeta.setOrderDelete("deleted");
