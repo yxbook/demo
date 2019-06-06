@@ -25,10 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
  ***************************************/
 @RestController
 @RequestMapping("/user")
-public class UserController {
+public class UserController_bak {
 
 
     //两个库中的表名
+
+    public static String bjdt_tablename = "t_lzfx_base_syonline";
+    public static String kettle_tablename = "syonline";
     public static String kettle_log = "t_lzfx_data_log";
 
    //数据库连接信息,适用于DatabaseMeta其中 一个构造器DatabaseMeta(String xml)
@@ -37,7 +40,7 @@ public class UserController {
     public static final String[] databasesXML = {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
                     "<connection>" +
-                    "<name>lurunda</name>" +
+                    "<name>bjdt</name>" +
                     "<server>127.0.0.1</server>" +
                     "<type>MYSQL</type>" +
                     "<access>Native</access>" +
@@ -66,20 +69,6 @@ public class UserController {
 
     public static String test(){
 
-        String field = "ID, version, basis, check_num, com_perp_name, device_name";
-        String whereSql = " and version = 0";
-        String syncedTable = "check_list";
-        String syncTable = "check_list_bak";
-        String[] updatelookup = {"ID","version","basis","check_num","com_perp_name", "device_name"} ;
-        Boolean[] updateOrNot = {false,true,true,true,true,true};
-        String fields [] = new String[]{"version","basis","check_num","com_perp_name", "device_name"};
-        boolean isAdd = true;
-        boolean isUpdate = true;
-        boolean isDelete = true;
-        String lookStream [] = new String[]{"ID", "version"};
-        String condition [] = new String[]{"=", "="};
-
-
         try {
             KettleEnvironment.init();
 
@@ -96,11 +85,11 @@ public class UserController {
             }
             VariableSpace space = new Variables();
             //将step日志数据库配置名加入到变量集中
-            space.setVariable("kettle_log","lurunda");
+            space.setVariable("kettle_log","bjdt");
             space.initializeVariablesFrom(null);
             StepLogTable stepLogTable = StepLogTable.getDefault(space,transMeta);
             //StepLogTable使用的数据库连接名（上面配置的变量名）。
-            stepLogTable.setConnectionName("lurunda");
+            stepLogTable.setConnectionName("bjdt");
             //设置Step日志的表名
             stepLogTable.setTableName(kettle_log);
             //设置TransMeta的StepLogTable
@@ -109,15 +98,13 @@ public class UserController {
             //******************************************************************
             //第一个表输入步骤(原表数据输入)
             TableInputMeta oldTableInput = new TableInputMeta();
-            DatabaseMeta database_bjdt = transMeta.findDatabase("lurunda");
+            DatabaseMeta database_bjdt = transMeta.findDatabase("bjdt");
             oldTableInput.setDatabaseMeta(database_bjdt);
-            //String old_select_sql = "SELECT id, version, basis, check_num, com_perp_name, device_name FROM "+ syncTable + " WHERE version = 0";
-            String old_select_sql = "SELECT " + field + " FROM "+ syncTable + " WHERE 1 = 1 " + whereSql;
-
+            String old_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE, CAPTITY FROM "+kettle_tablename + " WHERE TYPE = 4";
             oldTableInput.setSQL(old_select_sql);
 
             //添加TableInputMeta到转换中
-            StepMeta oldTableInputMetaStep = new StepMeta(syncTable,oldTableInput);
+            StepMeta oldTableInputMetaStep = new StepMeta("INPUTTABLE_"+kettle_tablename,oldTableInput);
             //给步骤添加在spoon工具中的显示位置
             transMeta.addStep(oldTableInputMetaStep);
             //*****************************************************************
@@ -126,13 +113,11 @@ public class UserController {
             //给表输入添加一个DatabaseMeta连接数据库
             DatabaseMeta database_kettle = transMeta.findDatabase("kettle");
             newTableInput.setDatabaseMeta(database_kettle);
-            //String new_select_sql = "SELECT id, version, basis, check_num, com_perp_name, device_name FROM "+syncedTable + " WHERE version = 0";
-            String new_select_sql = "SELECT " + field + " FROM "+ syncedTable + " WHERE 1 = 1 " + whereSql;
-
+            String new_select_sql = "SELECT ID,IP,CREATEDATETIME,LOGINNAME,TYPE , CAPTITY FROM "+bjdt_tablename + " WHERE TYPE = 4";
             newTableInput.setSQL(new_select_sql);
 
             //添加TableInputMeta到转换中
-            StepMeta newTableInputMetaStep = new StepMeta(syncedTable,newTableInput);
+            StepMeta newTableInputMetaStep = new StepMeta("INPUTTABLE_"+bjdt_tablename,newTableInput);
             //给步骤添加在spoon工具中的显示位置
             transMeta.addStep(newTableInputMetaStep);
             //******************************************************************
@@ -146,8 +131,7 @@ public class UserController {
             stepIOMeta.getInfoStreams().get(1).setStepMeta(oldTableInputMetaStep);
             mergeRowsMeta.setFlagField("xxx"); //设置标志字段
             mergeRowsMeta.setKeyFields(new String[]{"ID"});
-
-            mergeRowsMeta.setValueFields(fields);
+            mergeRowsMeta.setValueFields(new String[]{"IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"});
             StepMeta mergeStepMeta = new StepMeta("合并记录", mergeRowsMeta);
             transMeta.addStep(mergeStepMeta);
             //******************************************************************
@@ -164,31 +148,27 @@ public class UserController {
             synchronizeAfterMergeMeta.setCommitSize(10000); //设置事务提交数量
             synchronizeAfterMergeMeta.setDatabaseMeta(database_kettle); //目标数据源
             synchronizeAfterMergeMeta.setSchemaName("");//数据表schema
-            synchronizeAfterMergeMeta.setTableName(syncedTable); //数据表名称
+            synchronizeAfterMergeMeta.setTableName(bjdt_tablename); //数据表名称
             synchronizeAfterMergeMeta.setUseBatchUpdate(true); //设置批量更新
             //设置用来查询的关键字
-            synchronizeAfterMergeMeta.setKeyLookup(lookStream); //设置用来查询的关键字
-            synchronizeAfterMergeMeta.setKeyStream(lookStream); //设置流输入的字段
+            synchronizeAfterMergeMeta.setKeyLookup(new String[]{"ID", "CAPTITY"}); //设置用来查询的关键字
+            synchronizeAfterMergeMeta.setKeyStream(new String[]{"ID", "CAPTITY"}); //设置流输入的字段
             synchronizeAfterMergeMeta.setKeyStream2(new String[]{""});//一定要加上
-            synchronizeAfterMergeMeta.setKeyCondition(condition); //设置操作符
+            synchronizeAfterMergeMeta.setKeyCondition(new String[]{"=", "<"}); //设置操作符
             //设置要更新的字段
-
+            String[] updatelookup = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"} ;
+            String [] updateStream = {"ID","IP","CREATEDATETIME","LOGINNAME","TYPE", "CAPTITY"};
+            Boolean[] updateOrNot = {false,true,true,true,true,true};
             synchronizeAfterMergeMeta.setUpdateLookup(updatelookup);
-            synchronizeAfterMergeMeta.setUpdateStream(updatelookup);
+            synchronizeAfterMergeMeta.setUpdateStream(updateStream);
             synchronizeAfterMergeMeta.setUpdate(updateOrNot);
 
 
             //设置高级属性(操作)
             synchronizeAfterMergeMeta.setOperationOrderField("xxx"); //设置操作标志字段名
-
-
-            if(isAdd)
-                synchronizeAfterMergeMeta.setOrderInsert("new");
-            if (isUpdate)
-                synchronizeAfterMergeMeta.setOrderUpdate("changed");
-            if (isDelete)
-                synchronizeAfterMergeMeta.setOrderDelete("deleted");
-
+            synchronizeAfterMergeMeta.setOrderInsert("new");
+            synchronizeAfterMergeMeta.setOrderUpdate("changed");
+            synchronizeAfterMergeMeta.setOrderDelete("deleted");
             StepMeta synStepMeta = new StepMeta("数据同步", synchronizeAfterMergeMeta);
             transMeta.addStep(synStepMeta);
             //******************************************************************
@@ -198,8 +178,8 @@ public class UserController {
             transMeta.addTransHop(new TransHopMeta(mergeStepMeta,synStepMeta));
             //******************************************************************
 
-            //String transXml = transMeta.getXML();
-            //System.out.println("transXml:"+transXml);
+            String transXml = transMeta.getXML();
+            System.out.println("transXml:"+transXml);
 
             Trans trans = new Trans(transMeta);
 
